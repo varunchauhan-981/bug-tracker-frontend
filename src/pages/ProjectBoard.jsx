@@ -46,49 +46,27 @@ const ProjectBoard = () => {
     fetchBoardData();
   }, [projectId]);
 
-  // Handle Kanban Drag and Drop (Fixed duplication bug)
+  // Handle Kanban Drag and Drop (Direct Backend Sync)
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
 
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Create a copy of the current tickets array
-    const newTickets = Array.from(tickets);
-    
-    // Find the index of the dragged ticket
-    const sourceFlatIndex = newTickets.findIndex(t => t._id === draggableId);
-    if (sourceFlatIndex === -1) return;
+    const newStatus = destination.droppableId;
 
-    // Remove the ticket from its original position
-    const [movedTicket] = newTickets.splice(sourceFlatIndex, 1);
-    
-    // Update its status to the destination column
-    movedTicket.status = destination.droppableId;
-
-    // Insert the ticket into the correct position in the destination column
-    const destinationItems = newTickets.filter(t => t.status === destination.droppableId);
-    
-    if (destination.index < destinationItems.length) {
-      const ticketAtDest = destinationItems[destination.index];
-      const insertIndex = newTickets.findIndex(t => t._id === ticketAtDest._id);
-      newTickets.splice(insertIndex, 0, movedTicket);
-    } else {
-      newTickets.push(movedTicket);
-    }
-
-    // Instantly update UI without ghost duplicates
-    setTickets(newTickets);
-
-    // Background API Call to save the status change
     try {
+      // Backend par status update bhejein
       await API.put(`/tickets/${draggableId}`, {
-        status: destination.droppableId
+        status: newStatus
       });
-      toast.success(`Moved to ${destination.droppableId}`);
+      
+      toast.success(`Moved to ${newStatus}`);
+      
+      // Server se turant naya data khincho taaki duplicate ka chance na rahe
+      fetchBoardData();
     } catch (error) {
       toast.error('Failed to update status');
-      setTickets(tickets); // Revert on failure
     }
   };
 
