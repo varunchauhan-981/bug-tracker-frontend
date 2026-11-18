@@ -46,21 +46,39 @@ const ProjectBoard = () => {
     fetchBoardData();
   }, [projectId]);
 
-  // Handle Kanban Drag and Drop
+  // Handle Kanban Drag and Drop (Fixed duplication bug)
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
 
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Find the ticket being dragged
-    const ticketToMove = tickets.find((t) => t._id === draggableId);
+    // Create a copy of the current tickets array
+    const newTickets = Array.from(tickets);
     
-    // Optimistic UI Update: Instantly move the ticket on screen
-    const updatedTickets = tickets.map((t) => 
-      t._id === draggableId ? { ...t, status: destination.droppableId } : t
-    );
-    setTickets(updatedTickets);
+    // Find the index of the dragged ticket
+    const sourceFlatIndex = newTickets.findIndex(t => t._id === draggableId);
+    if (sourceFlatIndex === -1) return;
+
+    // Remove the ticket from its original position
+    const [movedTicket] = newTickets.splice(sourceFlatIndex, 1);
+    
+    // Update its status to the destination column
+    movedTicket.status = destination.droppableId;
+
+    // Insert the ticket into the correct position in the destination column
+    const destinationItems = newTickets.filter(t => t.status === destination.droppableId);
+    
+    if (destination.index < destinationItems.length) {
+      const ticketAtDest = destinationItems[destination.index];
+      const insertIndex = newTickets.findIndex(t => t._id === ticketAtDest._id);
+      newTickets.splice(insertIndex, 0, movedTicket);
+    } else {
+      newTickets.push(movedTicket);
+    }
+
+    // Instantly update UI without ghost duplicates
+    setTickets(newTickets);
 
     // Background API Call to save the status change
     try {
@@ -70,8 +88,7 @@ const ProjectBoard = () => {
       toast.success(`Moved to ${destination.droppableId}`);
     } catch (error) {
       toast.error('Failed to update status');
-      // Revert UI if API fails
-      setTickets(tickets); 
+      setTickets(tickets); // Revert on failure
     }
   };
 
